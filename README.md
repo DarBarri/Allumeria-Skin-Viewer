@@ -1,6 +1,6 @@
 # Allumeria 3D Skin Viewer
 
-A minimal, standalone 3D skin viewer for Allumeria. Built entirely with Python's standard `tkinter` and `Pillow`, it allows you to interactively preview your converted skins without needing to launch the game.
+A minimal, standalone 3D skin viewer for Allumeria. Built entirely with Python's standard `tkinter` and `Pillow`.
 
 ![alt text](https://github.com/DarBarri/Allumeria-Skin-Viewer/blob/main/Screenshot.png?raw=true)
 
@@ -13,9 +13,9 @@ A minimal, standalone 3D skin viewer for Allumeria. Built entirely with Python's
 
 ## Requirements
 - Python 3.x
-- [Pillow](https://pillow.readthedocs.io/) (`pip install Pillow`)
+- [Pillow](https://pillow.readthedocs.io/)
 - `tkinter` (Included in standard Python desktop installations)
-- *(Optional)* `tkinterdnd2` for Drag-and-Drop support (`pip install tkinterdnd2`)
+- *(Optional)* `tkinterdnd2` for Drag-and-Drop support
 
 ## Usage
 
@@ -38,4 +38,4 @@ Quit              |  Esc
 
 ## Known Bugs
 
-Allumeria >64x64 Texture Bug: Allumeria itself that turns any skins higher than 64x64 into a chaotic mess for online players. While this viewer can render higher resolutions (like 128x128 or 256x256) perfectly fine for local previewing
+Allumeria >64x64 Texture Bug: Allumeria turns any skins higher than 64x64 into a chaotic mess for online players.
