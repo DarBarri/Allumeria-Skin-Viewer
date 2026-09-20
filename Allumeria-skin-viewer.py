@@ -42,16 +42,23 @@ def norm(a):
     n = length(a)
     return (a[0]/n, a[1]/n, a[2]/n) if n else (0.0, 0.0, 0.0)
 
+def rot_x(p, a):
+    s, c = math.sin(a), math.cos(a)
+    return (p[0], p[1]*c - p[2]*s, p[1]*s + p[2]*c)
+
+def rot_y(p, a):
+    s, c = math.sin(a), math.cos(a)
+    return (p[0]*c + p[2]*s, p[1], -p[0]*s + p[2]*c)
+
+def rot_z(p, a):
+    s, c = math.sin(a), math.cos(a)
+    return (p[0]*c - p[1]*s, p[0]*s + p[1]*c, p[2])
+
 def rot_xyz(p, rx, ry, rz):
-    sx, cx = math.sin(rx), math.cos(rx)
-    sy, cy = math.sin(ry), math.cos(ry)
-    sz, cz = math.sin(rz), math.cos(rz)
-    x, y, z = p
-    return (
-        x*(cx*cy) + y*(cx*sy*sz - sx*cz) + z*(cx*sy*cz + sx*sz),
-        x*(sx*cy) + y*(sx*sy*sz + cx*cz) + z*(sx*sy*cz - cx*sz),
-        x*(-sy)  + y*(cy*sz)             + z*(cy*cz),
-    )
+    if rx: p = rot_x(p, rx)
+    if ry: p = rot_y(p, ry)
+    if rz: p = rot_z(p, rz)
+    return p
 
 def camera_orbit(p, yaw, pitch):
     # Orbit transform used only by the camera.
@@ -77,13 +84,7 @@ CUBE_FACES = [
 ]
 
 def cube_uv(u, v, w, h, d, mirrored=False, rotate_top=False):
-    """Return Pillow-friendly UV *edge* coordinates for an Allumeria cube.
-    cube.lua stores pixel-sampling coordinates, and its rasterizer applies a
-    half-pixel V offset.  Translating those values literally into Pillow shifts
-    the top/bottom strips by one pixel.  These coordinates describe the actual
-    logical texel rectangles instead: top starts at (u+d, v), bottom at
-    (u+d+w, v), and side strips start at y=v+d.
-    """
+    """Return Pillow-friendly UV *edge* coordinates for an Allumeria cube."""
     if mirrored:
         top_uv = [(u+d, v), (u+d+w, v), (u+d, v+d), (u+d+w, v+d)]
         if rotate_top:
@@ -124,15 +125,42 @@ class Mesh:
             self.uv_faces = cube_uv(*uv, *size, mirrored=mirrored, rotate_top=rotate_top)
             self.faces = CUBE_FACES
         else:
+            # Subdivide plane meshes into a 4x4 grid to resolve depth sorting artifacts
+            sub_x, sub_y = 4, 4
             w, h = size[0] / 16.0, size[1] / 16.0
-            self.vertices = [(-w, h, 0), (w, h, 0), (-w, -h, 0), (w, -h, 0)]
             u, v = uv
             pw, ph = size[0], size[1]
-            if mirrored:
-                self.uv_faces = [[(u + pw, v), (u, v), (u + pw, v + ph), (u, v + ph)]]
-            else:
-                self.uv_faces = [[(u, v), (u + pw, v), (u, v + ph), (u + pw, v + ph)]]
-            self.faces = [(0,1,2,3)]
+
+            self.vertices = []
+            self.uv_faces = []
+            self.faces = []
+
+            for j in range(sub_y + 1):
+                fy = j / sub_y
+                vy = h - 2.0 * h * fy
+                for i in range(sub_x + 1):
+                    fx = i / sub_x
+                    vx = -w + 2.0 * w * fx
+                    self.vertices.append((vx, vy, 0.0))
+
+            for j in range(sub_y):
+                fy0, fy1 = j / sub_y, (j + 1) / sub_y
+                v0, v1 = v + ph * fy0, v + ph * fy1
+                for i in range(sub_x):
+                    fx0, fx1 = i / sub_x, (i + 1) / sub_x
+                    u0, u1 = u + pw * fx0, u + pw * fx1
+
+                    idx0 = j * (sub_x + 1) + i
+                    idx1 = idx0 + 1
+                    idx2 = (j + 1) * (sub_x + 1) + i
+                    idx3 = idx2 + 1
+
+                    self.faces.append((idx0, idx1, idx2, idx3))
+
+                    if mirrored:
+                        self.uv_faces.append([(u1, v0), (u0, v0), (u1, v1), (u0, v1)])
+                    else:
+                        self.uv_faces.append([(u0, v0), (u1, v0), (u0, v1), (u1, v1)])
 
     def _cube_vertices(self):
         w, h, d = self.size
@@ -172,7 +200,7 @@ def build_model():
         Part((0,-16,0),rot=(0,0,math.radians(180)), meshes=[
             Mesh('plane',(0,0,0),(16,16,0),uv=(48,0),cull=False,name='hair_top'),
         ], name='hair_top'),
-        Part((0,-7,3.061),rot=(math.radians(180),0,math.radians(-22.5)),meshes=[
+        Part((0,-7,3.061),rot=(math.radians(202.5),0,0),meshes=[
             Mesh('plane',(0,0,0),(16,16,0),uv=(48,16),cull=False,name='hair_back')
         ],name='hair_back'),
         Part((0,0,5),rot=(0,math.radians(-90),0),meshes=[
@@ -223,9 +251,34 @@ def warp_face(texture, uv, dst, out_size):
     x1 = min(W, int(math.ceil(max(xs)) + 1)); y1 = min(H, int(math.ceil(max(ys)) + 1))
     if x1 <= x0 or y1 <= y0: return None, None
     local_dst = [(x-x0,y-y0) for x,y in dst]
-    coeff = perspective_coeff(local_dst, uv)
+
+    # Crop texture sub-region to completely avoid texture bleeding from neighboring areas
+    u_vals = [p[0] for p in uv]
+    v_vals = [p[1] for p in uv]
+    u_min = max(0, int(math.floor(min(u_vals))))
+    v_min = max(0, int(math.floor(min(v_vals))))
+    u_max = min(texture.width, int(math.ceil(max(u_vals))))
+    v_max = min(texture.height, int(math.ceil(max(v_vals))))
+
+    if u_max <= u_min or v_max <= v_min:
+        return None, None
+
+    sub_tex = texture.crop((u_min, v_min, u_max, v_max))
+
+    # Clamp local UVs slightly inside bounds to prevent boundary sampling artifacts
+    eps = 0.001
+    local_uv = [
+        (
+            max(eps, min(u_max - u_min - eps, u - u_min)),
+            max(eps, min(v_max - v_min - eps, v - v_min))
+        )
+        for u, v in uv
+    ]
+
+    coeff = perspective_coeff(local_dst, local_uv)
     if coeff is None: return None, None
-    patch = texture.transform((x1-x0,y1-y0), Image.Transform.PERSPECTIVE, coeff,
+
+    patch = sub_tex.transform((x1-x0,y1-y0), Image.Transform.PERSPECTIVE, coeff,
                               resample=Image.Resampling.NEAREST)
     mask = Image.new('L', (x1-x0,y1-y0), 0)
     md = ImageDraw.Draw(mask)
@@ -280,23 +333,30 @@ class Renderer:
                 verts_world = [part.world_vertex(v) for v in mesh.vertices]
                 for fi, inds in enumerate(mesh.faces):
                     pts3 = [verts_world[i] for i in inds]
-                    if mesh.kind == 'plane':
-                        uv_base = mesh.uv_faces[0]
-                        face_cull = False
-                    else:
-                        uv_base = mesh.uv_faces[fi]
-                        face_cull = mesh.cull
+                    uv_base = mesh.uv_faces[fi]
                     uv = [(u*scale, v*scale) for u,v in uv_base]
                     cam = [self.camera_transform(p) for p in pts3]
                     normal = norm(cross(sub(cam[1],cam[0]), sub(cam[3],cam[0])))
-                    if mesh.kind == 'cube' and normal[2] >= 0:
+
+                    # Honor mesh.cull properly
+                    if mesh.cull and normal[2] >= 0:
                         continue
                     if not all(p[2] > 0.03 for p in cam):
                         continue
                     dst = [self.project(p) for p in cam]
                     if any(p is None for p in dst): continue
+
                     depth = sum(p[2] for p in cam)/4.0
-                    faces.append((depth, normal, uv, dst, not face_cull))
+
+                    # Layer bias for overlay layers / unculled meshes to prevent depth fighting
+                    layer_bias = 0.0
+                    if mesh.inflate > 0:
+                        layer_bias -= 0.001
+                    if not mesh.cull:
+                        layer_bias -= 0.0005
+
+                    faces.append((depth + layer_bias, normal, uv, dst, not mesh.cull))
+
         faces.sort(key=lambda f: f[0], reverse=True)
         for depth, normal, uv, dst, double_sided in faces:
             patch, pos = warp_face(self.texture, uv, dst, frame.size)
