@@ -27,13 +27,14 @@ If no file is provided, a file picker dialog will open.
 
 ## Controls
 
-Action            |      Control
-Orbit / Rotate    |  Left Mouse Drag
-Zoom,             |  Mouse Wheel
-Refresh Texture   |  R / Space
-Reset Camera      |  F
-Preset Views      |  1" (Front), "2" (Right), "3" (Back), "4" (Left), "5" (Top), "6 (Bottom)
-Quit              |  Esc
+|     Action        |      Control        |
+|-------------------|---------------------|
+| Orbit / Rotate    |  Left Mouse Drag    |
+| Zoom,             |  Mouse Wheel        |
+| Refresh Texture   |  R / Space          |
+| Reset Camera      |  F                  | 
+| Preset Views      | 1 - 6, top - bottom |
+| Quit              |  Esc                |
 
 
 ## Known Bugs
