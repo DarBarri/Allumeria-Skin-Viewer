@@ -27,7 +27,7 @@ If no file is provided, a file picker dialog will open.
 
 ## Controls
 
-   Action         |      Control
+Action            |      Control
 Orbit / Rotate    |  Left Mouse Drag
 Zoom,             |  Mouse Wheel
 Refresh Texture   |  R / Space
