@@ -203,7 +203,7 @@ def build_model():
         Part((0,-7,3.061),rot=(math.radians(202.5),0,0),meshes=[
             Mesh('plane',(0,0,0),(16,16,0),uv=(48,16),cull=False,name='hair_back')
         ],name='hair_back'),
-        Part((0,0,5),rot=(0,math.radians(-90),0),meshes=[
+        Part((0,0,5),rot=(0,math.radians(90),math.radians(180)),meshes=[
             Mesh('plane',(0,0,0),(7,7,0),uv=(0,30),cull=False,name='tail')
         ],name='tail'),
         Part((0,-11.25,0),rot=(0,math.radians(90),math.radians(180)),meshes=[
